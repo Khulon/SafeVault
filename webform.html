@@ -1,0 +1,127 @@
+<!-- webform.html -->
+<!-- SafeVault: Secure Web Form with Client-Side Input Validation -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SafeVault - Secure Form</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 40px auto; padding: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        input.error { border-color: red; }
+        .error-msg { color: red; font-size: 0.85em; display: none; }
+        button { background-color: #2c7be5; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background-color: #1a5cb8; }
+    </style>
+</head>
+<body>
+    <h2>SafeVault - User Registration</h2>
+    <form id="secureForm" action="/submit" method="post" onsubmit="return validateForm(event)">
+
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username"
+                   placeholder="Letters, digits, underscores only"
+                   maxlength="100" autocomplete="off">
+            <span class="error-msg" id="usernameError">
+                Username may only contain letters, digits, and underscores (3–100 chars).
+            </span>
+        </div>
+
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email"
+                   placeholder="user@example.com"
+                   maxlength="100" autocomplete="off">
+            <span class="error-msg" id="emailError">
+                Please enter a valid email address (max 100 chars).
+            </span>
+        </div>
+
+        <button type="submit">Submit</button>
+    </form>
+
+    <script>
+        /**
+         * SafeVault Client-Side Input Sanitization & Validation
+         * Mirrors server-side rules in ValidationHelpers.cs
+         */
+
+        // Allowed special characters for username
+        const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,100}$/;
+        // Basic email validation pattern
+        const EMAIL_PATTERN = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+
+        /**
+         * Strips HTML tags and encodes dangerous characters to prevent XSS.
+         * Matches server-side SanitizeInput() behavior.
+         */
+        function sanitizeInput(input) {
+            return input
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#x27;")
+                .replace(/\//g, "&#x2F;");
+        }
+
+        /**
+         * Checks for common XSS attack patterns in input.
+         * Returns true if input is safe, false if malicious content detected.
+         */
+        function isXSSSafe(input) {
+            const lower = input.toLowerCase();
+            const xssPatterns = [
+                "<script", "<script>", "<iframe", "javascript:",
+                "onerror=", "onload=", "onclick=", "eval(",
+                "document.cookie", "alert(", "prompt("
+            ];
+            return !xssPatterns.some(pattern => lower.includes(pattern));
+        }
+
+        function showError(fieldId, errorId, show) {
+            const field = document.getElementById(fieldId);
+            const msg = document.getElementById(errorId);
+            if (show) {
+                field.classList.add("error");
+                msg.style.display = "block";
+            } else {
+                field.classList.remove("error");
+                msg.style.display = "none";
+            }
+            return !show;
+        }
+
+        function validateForm(event) {
+            event.preventDefault();
+            let isValid = true;
+
+            const usernameRaw = document.getElementById("username").value.trim();
+            const emailRaw = document.getElementById("email").value.trim();
+
+            // --- Username Validation ---
+            const usernameOk = USERNAME_PATTERN.test(usernameRaw) && isXSSSafe(usernameRaw);
+            isValid = showError("username", "usernameError", !usernameOk) && isValid;
+
+            // --- Email Validation ---
+            const emailOk = EMAIL_PATTERN.test(emailRaw) && emailRaw.length <= 100 && isXSSSafe(emailRaw);
+            isValid = showError("email", "emailError", !emailOk) && isValid;
+
+            if (isValid) {
+                // Sanitize before sending (server also sanitizes as a second layer)
+                const sanitizedUsername = sanitizeInput(usernameRaw);
+                const sanitizedEmail = sanitizeInput(emailRaw);
+                console.log("Validated inputs:", { sanitizedUsername, sanitizedEmail });
+                // In production: submit via fetch() with CSRF token
+                event.target.submit();
+            }
+
+            return false;
+        }
+    </script>
+</body>
+</html>
